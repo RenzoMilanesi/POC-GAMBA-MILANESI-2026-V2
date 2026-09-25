@@ -1,0 +1,287 @@
+{
+  "info": {
+    "name": "PoC V2: GraphQL vs REST (turnos)",
+    "description": "Carpetas 1 a 6: GraphQL. Carpeta 7: comparación con REST. La suscripción se muestra en GraphiQL (ver README). Reiniciar el servidor antes de repetir la secuencia.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Punto de partida: es HTTP común",
+      "item": [
+        {
+          "name": "Un POST a /graphql con un JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"query\":\"query { turno(id: \\\"turno-1\\\") { id fecha paciente { nombre } profesional { nombre } } }\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "GraphQL es un solo endpoint: un POST cuyo cuerpo es {\"query\": \"...\"}. Pregunta para la clase: ¿cuántas llamadas haría REST para traer turno, paciente y profesional? (se responde en la carpeta 7)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Introspección",
+      "item": [
+        {
+          "name": "Campos del tipo Turno",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  __type(name: \"Turno\") {\n    fields { name type { name kind ofType { name } } }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "El servidor describe su propio schema: así funcionan GraphiQL y el autocompletado."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Selección de campos y anidado",
+      "item": [
+        {
+          "name": "Resumen (solo id y fecha)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  turnos { id fecha }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "El cliente elige los campos: no viene nada de más."
+          }
+        },
+        {
+          "name": "Detalle anidado en 1 llamada",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  turno(id: \"turno-1\") {\n    id fecha estado\n    paciente { nombre }\n    profesional { nombre especialidad }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "Turno, paciente y profesional en un solo request."
+          }
+        },
+        {
+          "name": "Campo inexistente",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  turnos { campoInexistente }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "HTTP 400: el schema valida la consulta antes de ejecutarla."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Variables",
+      "item": [
+        {
+          "name": "Agenda con variable",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Agenda($prof: ID) {\n  turnos(profesionalId: $prof) { id fecha }\n}",
+                "variables": "{\n  \"prof\": \"prof-1\"\n}"
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "La consulta es fija y el valor viaja aparte. Probar cambiar \"prof\" por \"prof-2\"."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Alias",
+      "item": [
+        {
+          "name": "Dos agendas en una llamada",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  clinica: turnos(profesionalId: \"prof-1\") { id fecha }\n  cardiologia: turnos(profesionalId: \"prof-2\") { id fecha }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "Sin alias no se puede pedir el mismo campo dos veces con distintos argumentos."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Fragments",
+      "item": [
+        {
+          "name": "Fragment reutilizado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "fragment DatosTurno on Turno {\n  id\n  fecha\n  paciente { nombre }\n}\n\nquery {\n  primero: turno(id: \"turno-1\") { ...DatosTurno }\n  segundo: turno(id: \"turno-2\") { ...DatosTurno }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "DatosTurno se escribe una vez y se usa dos veces."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. N+1, mutation y errores",
+      "item": [
+        {
+          "name": "N+1: sin DataLoader",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-sin-dataloader",
+                "value": "1"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  turnos { id paciente { nombre } profesional { nombre } }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "Mirar la consola del servidor: total=21 accesos (1 + 10 pacientes + 10 profesionales)."
+          }
+        },
+        {
+          "name": "N+1: con DataLoader",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  turnos { id paciente { nombre } profesional { nombre } }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "Misma consulta y mismo resultado. Consola: total=3 accesos."
+          }
+        },
+        {
+          "name": "Crear turno",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation Crear($input: CrearTurnoInput!) {\n  crearTurno(input: $input) {\n    id fecha estado\n    paciente { nombre }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"pacienteId\": \"pac-2\",\n    \"profesionalId\": \"prof-1\",\n    \"fecha\": \"2030-05-20T11:00:00Z\"\n  }\n}"
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "Crea turno-11. Si hay una suscripción abierta en GraphiQL, se ve en vivo."
+          }
+        },
+        {
+          "name": "Horario ocupado (CONFLICT)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  crearTurno(input: { pacienteId: \"pac-2\", profesionalId: \"prof-1\", fecha: \"2030-05-20T09:00:00Z\" }) { id }\n}",
+                "variables": ""
+              }
+            },
+            "url": "{{baseUrl}}/graphql",
+            "description": "errors[0].extensions.code = CONFLICT."
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Comparación con REST (¿qué paciente y profesional tiene el turno-1?)",
+      "item": [
+        {
+          "name": "REST paso 1: el turno",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/turnos/turno-1",
+            "description": "Trae los ids, no los nombres."
+          }
+        },
+        {
+          "name": "REST paso 2: el paciente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pacientes/pac-1",
+            "description": "Solo hacía falta el nombre, pero llegan también email, teléfono y obra social (over-fetching)."
+          }
+        },
+        {
+          "name": "REST paso 3: el profesional",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/profesionales/prof-1",
+            "description": "Tercera llamada. GraphQL lo resolvió en 1 (carpeta 2, \"Detalle anidado\")."
+          }
+        }
+      ]
+    }
+  ]
+}

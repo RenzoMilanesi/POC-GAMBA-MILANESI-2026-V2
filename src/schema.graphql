@@ -1,0 +1,48 @@
+enum EstadoTurno {
+  PROGRAMADO
+  CANCELADO
+  ATENDIDO
+}
+
+# email, telefono y obraSocial están para mostrar el over-fetching de REST:
+# en GraphQL solo viajan si el cliente los pide.
+type Paciente {
+  id: ID!
+  nombre: String!
+  email: String!
+  telefono: String!
+  obraSocial: String!
+}
+
+type Profesional {
+  id: ID!
+  nombre: String!
+  especialidad: String!
+}
+
+type Turno {
+  id: ID!
+  fecha: String!
+  estado: EstadoTurno!
+  paciente: Paciente!
+  profesional: Profesional!
+}
+
+input CrearTurnoInput {
+  pacienteId: ID!
+  profesionalId: ID!
+  fecha: String!
+}
+
+type Query {
+  turno(id: ID!): Turno
+  turnos(profesionalId: ID): [Turno!]!
+}
+
+type Mutation {
+  crearTurno(input: CrearTurnoInput!): Turno!
+}
+
+type Subscription {
+  turnoCreado: Turno!
+}
